@@ -171,3 +171,252 @@
   </script>
 </body>
 </html>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaskFlow AI | Smart Workflow Planner</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f6fb;
+      color: #20243a;
+    }
+    header {
+      background: #242750;
+      color: white;
+      padding: 24px 7%;
+    }
+    header h1 { margin: 0 0 8px; }
+    header p { margin: 0; color: #d8daf5; }
+    main { max-width: 950px; margin: 28px auto; padding: 0 18px; }
+    .panel {
+      background: white;
+      border-radius: 14px;
+      padding: 22px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 18px #2527500d;
+    }
+    textarea, input, select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #d6d9e5;
+      border-radius: 8px;
+      margin: 8px 0 14px;
+      font: inherit;
+    }
+    textarea { min-height: 100px; resize: vertical; }
+    button {
+      background: #5557d9;
+      color: white;
+      border: 0;
+      padding: 11px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover { background: #4143b7; }
+    button.secondary { background: #e9eaf5; color: #303354; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat {
+      background: white;
+      padding: 17px;
+      border-radius: 12px;
+    }
+    .stat strong { display: block; font-size: 25px; margin-top: 8px; }
+    .task {
+      border: 1px solid #e4e6ef;
+      padding: 15px;
+      border-radius: 10px;
+      margin-top: 12px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .task input[type="checkbox"] { width: auto; margin-top: 4px; }
+    .task-content { flex: 1; min-width: 0; }
+    .task-title { font-weight: bold; overflow-wrap: anywhere; }
+    .completed .task-title { text-decoration: line-through; color: #81859a; }
+    .meta { color: #666b80; font-size: 13px; margin-top: 8px; }
+    .priority { font-weight: bold; }
+    .empty { color: #777b8f; text-align: center; padding: 25px; }
+    .delete { background: #fae9eb; color: #a12d3d; padding: 8px 10px; }
+    .note { font-size: 13px; color: #666b80; line-height: 1.5; }
+    @media (max-width: 550px) {
+      .stats { grid-template-columns: 1fr; }
+      header { padding: 22px 18px; }
+      .panel { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>✦ TaskFlow AI</h1>
+    <p>Turn your instructions into an organized workflow.</p>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Create a workflow</h2>
+      <label for="instructions">What do you need to get done?</label>
+      <textarea id="instructions"
+        placeholder="Example: Prepare my project report. Create presentation slides. Submit the project by Friday."></textarea>
+      <label for="defaultPriority">Default task priority</label>
+      <select id="defaultPriority">
+        <option>Medium</option>
+        <option>High</option>
+        <option>Low</option>
+      </select>
+      <label for="defaultDue">Optional due date for new tasks</label>
+      <input type="date" id="defaultDue">
+      <button id="generateBtn">Generate tasks</button>
+      <p class="note">Prototype: tasks are generated using simple text rules. Real AI integration comes later.</p>
+    </section>
+
+    <section class="stats">
+      <div class="stat">Total tasks<strong id="total">0</strong></div>
+      <div class="stat">Completed<strong id="done">0</strong></div>
+      <div class="stat">Remaining<strong id="remaining">0</strong></div>
+    </section>
+
+    <section class="panel">
+      <h2>My workflow</h2>
+      <button class="secondary" id="clearDone">Remove completed</button>
+      <div id="taskList">
+        <p class="empty">Your tasks will appear here.</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const instructionBox = document.getElementById("instructions");
+    const priorityBox = document.getElementById("defaultPriority");
+    const dueBox = document.getElementById("defaultDue");
+    const taskList = document.getElementById("taskList");
+
+    let tasks = [];
+
+    // Restore saved tasks when the page opens.
+    try {
+      tasks = JSON.parse(localStorage.getItem("taskflowTasks")) || [];
+      if (!Array.isArray(tasks)) tasks = [];
+    } catch {
+      tasks = [];
+    }
+
+    function saveTasks() {
+      localStorage.setItem("taskflowTasks", JSON.stringify(tasks));
+    }
+
+    function renderTasks() {
+      taskList.replaceChildren();
+
+      document.getElementById("total").textContent = tasks.length;
+      document.getElementById("done").textContent =
+        tasks.filter(task => task.completed).length;
+      document.getElementById("remaining").textContent =
+        tasks.filter(task => !task.completed).length;
+
+      if (tasks.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "empty";
+        empty.textContent = "No tasks yet. Enter instructions above to begin.";
+        taskList.appendChild(empty);
+        return;
+      }
+
+      tasks.forEach(task => {
+        const card = document.createElement("div");
+        card.className = "task" + (task.completed ? " completed" : "");
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = task.completed;
+        checkbox.setAttribute("aria-label", "Mark task complete");
+        checkbox.addEventListener("change", () => {
+          task.completed = checkbox.checked;
+          saveTasks();
+          renderTasks();
+        });
+
+        const content = document.createElement("div");
+        content.className = "task-content";
+
+        const title = document.createElement("div");
+        title.className = "task-title";
+        title.textContent = task.title;
+
+        const meta = document.createElement("div");
+        meta.className = "meta";
+
+        const priority = document.createElement("span");
+        priority.className = "priority";
+        priority.textContent = task.priority + " priority";
+
+        const due = document.createElement("span");
+        due.textContent = task.due ? " · Due: " + task.due : " · No due date";
+
+        meta.append(priority, due);
+        content.append(title, meta);
+
+        const remove = document.createElement("button");
+        remove.className = "delete";
+        remove.textContent = "Delete";
+        remove.addEventListener("click", () => {
+          tasks = tasks.filter(item => item.id !== task.id);
+          saveTasks();
+          renderTasks();
+        });
+
+        card.append(checkbox, content, remove);
+        taskList.appendChild(card);
+      });
+    }
+
+    document.getElementById("generateBtn").addEventListener("click", () => {
+      const text = instructionBox.value.trim();
+
+      if (!text) {
+        alert("Please enter some instructions first.");
+        return;
+      }
+
+      const newTasks = text
+        .split(/[\\n.!?;]+/)
+        .map(part => part.trim())
+        .filter(Boolean);
+
+      newTasks.forEach(title => {
+        tasks.push({
+          id: Date.now().toString() + Math.random().toString(16).slice(2),
+          title,
+          priority: priorityBox.value,
+          due: dueBox.value,
+          completed: false
+        });
+      });
+
+      saveTasks();
+      renderTasks();
+      instructionBox.value = "";
+    });
+
+    document.getElementById("clearDone").addEventListener("click", () => {
+      tasks = tasks.filter(task => !task.completed);
+      saveTasks();
+      renderTasks();
+    });
+
+    renderTasks();
+  </script>
+</body>
+</html>
